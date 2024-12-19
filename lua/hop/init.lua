@@ -599,6 +599,66 @@ function M.hint_anywhere(opts)
   M.hint_with_regex(jump_regex.regex_by_anywhere(), opts)
 end
 
+---@param opts Options
+function M.hint_char1_lookahead(opts)
+  local hint = require('hop.hint')
+  local jump_regex = require('hop.jump_regex')
+
+  opts = override_opts(opts)
+
+  if not M.initialized then
+    vim.notify('Hop is not initialized; please call the setup function', vim.log.levels.ERROR)
+    return
+  end
+
+  local hs = hint.create_hint_state(opts)
+
+  local visible_characters = {}
+  local window = require'hop.window'
+  local all_win_ctxs = hs.all_ctxs
+  if opts.current_line_only then
+    all_win_ctxs = { all_win_ctxs[1] }
+  end
+  -- Iterate all window then line contexts
+  for _, wctx in ipairs(all_win_ctxs) do
+    window.clip_window_context(wctx, opts)
+    local all_line_ctxs = window.get_lines_context(wctx)
+    for _, lctx in ipairs(all_line_ctxs) do
+      window.clip_line_context(wctx, lctx, opts)
+      for character in lctx.line:gmatch'.' do
+        visible_characters[character] = true
+      end
+    end
+  end
+
+  local all_hints = {}
+
+  for character in pairs(visible_characters) do
+    local jump_target = require('hop.jump_target')
+    local regex = jump_regex.regex_by_case_searching(character, true, opts)
+    local jump_target_gtr = jump_target.jump_target_generator(regex)
+    local generated = jump_target_gtr(opts)
+    local hints = hint.create_hints(generated.jump_targets, generated.indirect_jump_targets, opts)
+    for _, one_hint in ipairs(hints) do
+      table.insert(all_hints, one_hint)
+    end
+  end
+
+  hs.hints = all_hints
+
+  apply_dimming(hs, opts)
+  hint.set_hint_extmarks(hs.hl_ns, hs.hints, opts)
+  vim.cmd.redraw()
+
+  local c = M.get_input_pattern('Hop 1 char: ', 1)
+  if not c then
+    M.quit(hs)
+    return
+  end
+
+  M.hint_with_regex(jump_regex.regex_by_case_searching(c, true, opts), opts)
+end
+
 -- Setup user settings.
 function M.setup(opts)
   -- Look up keys in user-defined table with fallback to defaults.
