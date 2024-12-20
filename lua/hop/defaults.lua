@@ -6,6 +6,7 @@ local M = {}
 local hint = require('hop.hint')
 
 M.keys = 'asdghklqwertyuiopzxcvbnmfj'
+M.get_virt_text = require'hop.hint'.hop_hl_virt_text
 M.quit_key = '<Esc>'
 M.perm_method = require('hop.perm').TrieBacktrackFilling
 M.reverse_distribution = false

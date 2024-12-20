@@ -106,6 +106,56 @@ local function sanitize_cols(wctx)
   end
 end
 
+-- Remove ranges from a set of ranges.
+---@param ranges CursorPos[][] A sorted array of disjoint { start: CursorPos, end_: CursorPos } ranges
+---@param excludes CursorPos[][] A { start, end } array, inclusive
+local function exclude(ranges, excludes)
+    local all_intervals = {}
+
+    for _, interval in ipairs(ranges) do
+        local start, end_ = interval[1], interval[2]
+        table.insert(all_intervals, {start, 1})
+        table.insert(all_intervals, {end_, -1})
+    end
+
+    for _, exclude_range in ipairs(excludes) do
+        local start, end_ = exclude_range[1], exclude_range[2]
+        table.insert(all_intervals, {start, -1})
+        table.insert(all_intervals, {end_, 1})
+    end
+
+    table.sort(all_intervals, function(a, b)
+        if a[1].row < b[1].row then
+            return true
+        elseif a[1].row > b[1].row then
+            return false
+        else
+            return a[1].col < b[1].col
+        end
+    end)
+
+    local accum = 0
+    local output = {}
+    local new_interval = {}
+
+    for _, point_delta in ipairs(all_intervals) do
+        local point, delta = point_delta[1], point_delta[2]
+        accum = accum + delta
+
+        if accum == 1 then
+            table.insert(new_interval, point)
+        elseif accum == 0 and #new_interval == 1 then
+            table.insert(new_interval, point)
+            if not vim.deep_equal(new_interval[1], new_interval[2]) then
+                table.insert(output, new_interval)
+            end
+            new_interval = {}
+        end
+    end
+
+    return output
+end
+
 -- Dim everything out to prepare the hop session for all windows
 ---@param hint_state HintState
 ---@param opts Options
@@ -120,15 +170,29 @@ local function apply_dimming(hint_state, opts)
   for _, wctx in ipairs(hint_state.all_ctxs) do
     -- Set the highlight of unmatched lines of the buffer.
     sanitize_cols(wctx)
-    local start_line, end_line = window.line_range2extmark(wctx.line_range)
-    local start_col, end_col = window.column_range2extmark(wctx.column_range)
-    api.nvim_buf_set_extmark(wctx.buf_handle, hint_state.dim_ns, start_line, start_col, {
-      end_line = end_line,
-      end_col = end_col,
-      hl_group = 'HopUnmatched',
-      hl_eol = true,
-      priority = hint.HintPriority.DIM,
-    })
+    local hints = hint_state.hints or {}
+    local exclude_ranges = {}
+    for _, h in ipairs(hints) do
+      local jt = h.jump_target
+      if wctx.buf_handle == jt.buffer then
+        local start = jt.cursor
+        local range = { start, { row = start.row, col = start.col + jt.length } }
+        table.insert(exclude_ranges, range)
+      end
+    end
+    local dim_ranges = { { { row = wctx.line_range[1], col = wctx.column_range[1] }, { row = wctx.line_range[2], col = wctx.column_range[2] } } }
+    dim_ranges = exclude(dim_ranges, exclude_ranges)
+    for _, range in ipairs(dim_ranges) do
+      local start_line, start_col = window.pos2extmark(range[1])
+      local end_line, end_col = window.pos2extmark(range[2])
+      api.nvim_buf_set_extmark(wctx.buf_handle, hint_state.dim_ns, start_line, start_col, {
+        end_line = end_line,
+        end_col = end_col,
+        hl_group = 'HopUnmatched',
+        hl_eol = true,
+        priority = hint.HintPriority.DIM,
+      })
+    end
 
     -- Hide diagnostics
     for ns in pairs(hint_state.diag_ns) do
@@ -355,6 +419,8 @@ function M.refine_hints(key, hint_state, callback, opts)
 
     hint_state.hints = hints
 
+    clear_namespace(hint_state.buf_list, hint_state.dim_ns)
+    apply_dimming(hint_state, opts)
     clear_namespace(hint_state.buf_list, hint_state.hl_ns)
     hint.set_hint_extmarks(hint_state.hl_ns, hints, opts)
   else

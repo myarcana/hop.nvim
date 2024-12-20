@@ -15,6 +15,15 @@ local api = vim.api
 ---@field preview_ns integer
 ---@field diag_ns table
 
+-- A list of `[text, highlight]` tuples, each representing a text chunk with
+-- specified highlight. `highlight` element can either be a single highlight
+-- group, or an array of multiple highlight groups that will be stacked
+-- (highest priority last). A highlight group can be supplied either as
+-- a string or as an integer, the latter which can be obtained using
+-- |nvim_get_hl_id_by_name()|.
+---@alias HighlightGroup string|number
+---@alias VirtualText table<string, HighlightGroup|HighlightGroup[]>[]
+
 local M = {}
 
 ---@enum HintDirection
@@ -180,6 +189,26 @@ function M.create_hint_state(opts)
   return hint_state
 end
 
+---@param hint Hint
+---@return VirtualText
+function M.hop_hl_virt_text(hint)
+  local label = hint.label
+  local virt_text = { { label, 'HopNextKey' } }
+  -- Get the byte index of the second hint so that we can slice it correctly
+  if label ~= nil and vim.fn.strdisplaywidth(label) ~= 1 then
+    local snd_idx = vim.fn.byteidx(label, 1)
+    virt_text = { { label:sub(1, snd_idx), 'HopNextKey1' }, { label:sub(snd_idx + 1), 'HopNextKey2' } }
+  end
+  return virt_text
+end
+
+---@param hint Hint
+---@return VirtualText
+function M.buffer_hl_virt_text(hint)
+  local label = hint.label
+  return { { label, {} } }
+end
+
 -- Create the extmarks for per-line hints.
 ---@param hl_ns integer
 ---@param hints Hint[]
@@ -191,12 +220,8 @@ function M.set_hint_extmarks(hl_ns, hints, opts)
       label = label:upper()
     end
 
-    local virt_text = { { label, 'HopNextKey' } }
-    -- Get the byte index of the second hint so that we can slice it correctly
-    if label ~= nil and vim.fn.strdisplaywidth(label) ~= 1 then
-      local snd_idx = vim.fn.byteidx(label, 1)
-      virt_text = { { label:sub(1, snd_idx), 'HopNextKey1' }, { label:sub(snd_idx + 1), 'HopNextKey2' } }
-    end
+    local get_virt_text = opts.get_virt_text or M.hop_hl_virt_text
+    local virt_text = get_virt_text(hint)
 
     local row, col = window.pos2extmark(hint.jump_target.cursor)
     api.nvim_buf_set_extmark(hint.jump_target.buffer, hl_ns, row, col, {
