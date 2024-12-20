@@ -999,6 +999,26 @@ below.
     Defaults:~
         `match_mappings = { }`
 
+`get_virt_text({hint})`                                       *hop-config-get_virt_text*
+    A function that returns the virtual text for the hint, to be used by
+    |nvim_buf_set_extmark()|.
+
+    Hop provides two `get_virt_text` functions:
+    • `require'hop.hint'.hop_hl_virt_text` (default) Use |hop-highlights|
+    • `require'hop.hint'.buffer_hl_virt_text` Each character of the hint will
+      have the same highlighting as the character that it overlays
+
+    Parameters: ~
+      • {hint}  (`Hint`) A hint with keys `label` and `jump_target`. See
+        |hop-jump-target-api|.
+
+    Return: ~
+      A list of `[text, highlight]` tuples, each representing a text chunk
+      with specified highlight. See `virt_text` in |nvim_buf_set_extmark()|.
+
+    Defaults:~ >
+        get_virt_text = require'hop.hint'.hop_hl_virt_text
+<
 ==============================================================================
 EXTENSION                                                        *hop-extension*
 
