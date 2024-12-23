@@ -34,10 +34,10 @@ M.most_similar_shapes = {
 -- The keys that are most visually similar to the character will be at the
 -- front of the output string. If the visual similarity is unknown, the input
 -- keys order is used.
----@param character string
 ---@param keys string
+---@param character string
 ---@return string
-function M.sort_visually_similar(character, keys)
+function M.sort_visually_similar(keys, character)
   local sort_order = M.most_similar_shapes[character]
   if sort_order == nil then
     return keys
