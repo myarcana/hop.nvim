@@ -206,7 +206,8 @@ end
 ---@return VirtualText
 function M.buffer_hl_virt_text(hint)
   local label = hint.label
-  return { { label, {} } }
+  local first_char = label:sub(1, 1)
+  return { { first_char, {} } }
 end
 
 -- Create the extmarks for per-line hints.
